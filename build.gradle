@@ -1,0 +1,81 @@
+plugins {
+    id 'groovy'
+}
+
+repositories {
+    mavenCentral()
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+ext {
+    geaflowVersion = '0.8.0-incubating'
+    groovyVersion = '5.0.8'
+}
+
+// override with e.g. -PlocalGroovyJar=$HOME/Developer/groovy-6.0.0-beta-2/lib/groovy-6.0.0-beta-2.jar
+def localGroovyJar = providers.gradleProperty('localGroovyJar')
+
+if (localGroovyJar.present) {
+    tasks.withType(GroovyCompile).configureEach {
+        groovyClasspath = files(localGroovyJar.get())
+    }
+}
+
+// -Pgep27 turns on the experimental GEP-27 codegen flags in the forked compiler
+if (providers.gradleProperty('gep27').present) {
+    tasks.withType(GroovyCompile).configureEach {
+        groovyOptions.forkOptions.jvmArgs += ['-Dgroovy.target.closure.pack=true',
+                                              '-Dgroovy.target.lambda.hoist=true',
+                                              '-Dgroovy.target.closure.pack.report=true']
+    }
+}
+
+dependencies {
+    if (localGroovyJar.present) {
+        implementation files(localGroovyJar.get())
+    } else {
+        implementation "org.apache.groovy:groovy:$groovyVersion"
+    }
+    implementation "org.apache.geaflow:geaflow-api:$geaflowVersion"
+    implementation "org.apache.geaflow:geaflow-pdata:$geaflowVersion"
+    implementation "org.apache.geaflow:geaflow-cluster:$geaflowVersion"
+    implementation "org.apache.geaflow:geaflow-on-local:$geaflowVersion"
+    implementation "org.apache.geaflow:geaflow-pipeline:$geaflowVersion"
+}
+
+tasks.register('runVariant', JavaExec) {
+    group = 'application'
+    description = 'Run SubmitVariants with -Pvariant=lambda|methodref|closure|coerce'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'geaflow.groovy.SubmitVariants'
+    args providers.gradleProperty('variant').getOrElse('lambda')
+    jvmArgs '--add-opens=java.base/java.lang=ALL-UNNAMED',
+            '--add-opens=java.base/java.lang.invoke=ALL-UNNAMED',
+            '--add-opens=java.base/java.util=ALL-UNNAMED',
+            '--add-opens=java.base/java.util.concurrent=ALL-UNNAMED',
+            '--add-opens=java.base/java.net=ALL-UNNAMED',
+            '--add-opens=java.base/java.nio=ALL-UNNAMED',
+            '--add-opens=java.base/sun.nio.ch=ALL-UNNAMED',
+            '--add-opens=java.base/java.math=ALL-UNNAMED'
+}
+
+tasks.register('runPageRank', JavaExec) {
+    group = 'application'
+    description = 'Run the PageRank example on a local in-process GeaFlow environment'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'geaflow.groovy.PageRank'
+    // cglib (used by the brpc RPC layer) and kryo need deep reflection on JDK 17+
+    jvmArgs '--add-opens=java.base/java.lang=ALL-UNNAMED',
+            '--add-opens=java.base/java.lang.invoke=ALL-UNNAMED',
+            '--add-opens=java.base/java.util=ALL-UNNAMED',
+            '--add-opens=java.base/java.util.concurrent=ALL-UNNAMED',
+            '--add-opens=java.base/java.net=ALL-UNNAMED',
+            '--add-opens=java.base/java.nio=ALL-UNNAMED',
+            '--add-opens=java.base/sun.nio.ch=ALL-UNNAMED',
+            '--add-opens=java.base/java.math=ALL-UNNAMED'
+}
