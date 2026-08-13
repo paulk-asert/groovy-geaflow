@@ -1,12 +1,9 @@
 package geaflow.groovy
 
-import groovy.transform.CompileStatic
 import org.apache.geaflow.api.function.io.SinkFunction
-import org.apache.geaflow.api.graph.PGraphWindow
 import org.apache.geaflow.api.graph.compute.VertexCentricCompute
 import org.apache.geaflow.api.graph.function.vc.VertexCentricCombineFunction
 import org.apache.geaflow.api.graph.function.vc.VertexCentricComputeFunction
-import org.apache.geaflow.api.pdata.stream.window.PWindowStream
 import org.apache.geaflow.api.window.impl.AllWindow
 import org.apache.geaflow.env.EnvironmentFactory
 import org.apache.geaflow.model.graph.edge.IEdge
@@ -24,14 +21,13 @@ import org.apache.geaflow.view.IViewDesc
  * using vertex-centric PageRank on Apache GeaFlow (incubating),
  * run in a local in-process environment.
  */
-@CompileStatic
 class PageRank {
 
     static void main(String[] args) {
-        def environment = EnvironmentFactory.onLocalEnvironment()
-        def pipeline = PipelineFactory.buildPipeline(environment)
+        val environment = EnvironmentFactory.onLocalEnvironment()
+        val pipeline = PipelineFactory.buildPipeline(environment)
         pipeline.submit(new PRTask())
-        def result = pipeline.execute()
+        val result = pipeline.execute()
         result.get()
         environment.shutdown()
         System.exit(0)
@@ -40,7 +36,7 @@ class PageRank {
     static class PRTask implements PipelineTask {
         @Override
         void execute(IPipelineTaskContext ctx) {
-            var follows = [
+            val follows = [
                 'Emily Seebohm'    : ['Kaylee McKeown', 'Regan Smith'],
                 'Kylie Masse'      : ['Kaylee McKeown', 'Regan Smith', 'Ingrid Wilm'],
                 'Regan Smith'      : ['Kaylee McKeown', 'Katharine Berkoff'],
@@ -49,27 +45,26 @@ class PageRank {
                 'Ingrid Wilm'      : ['Kaylee McKeown', 'Regan Smith', 'Kylie Masse']
             ]
 
-            List<IVertex<String, Double>> vertices = follows.keySet().collect {
-                (IVertex<String, Double>) new ValueVertex<>(it, 1d)
+            val vertices = follows.keySet().collect {
+                new ValueVertex<>(it, 1d)
             }
-            List<IEdge<String, Integer>> edges = follows.collectMany { follower, followed ->
-                followed.collect { (IEdge<String, Integer>) new ValueEdge<>(follower, it, 1) }
+            val edges = follows.collectMany { follower, followed ->
+                followed.collect { new ValueEdge<>(follower, it, 1) }
             }
 
-            PWindowStream<IVertex<String, Double>> vertexSource =
+            val vertexSource =
                 ctx.buildSource(new CollectionSource<IVertex<String, Double>>(vertices),
-                    AllWindow.<IVertex<String, Double>> getInstance())
-            PWindowStream<IEdge<String, Integer>> edgeSource =
+                    AllWindow.getInstance())
+            val edgeSource =
                 ctx.buildSource(new CollectionSource<IEdge<String, Integer>>(edges),
-                    AllWindow.<IEdge<String, Integer>> getInstance())
+                    AllWindow.getInstance())
 
-            def graphViewDesc = GraphViewBuilder.createGraphView(GraphViewBuilder.DEFAULT_GRAPH)
+            val graphViewDesc = GraphViewBuilder.createGraphView(GraphViewBuilder.DEFAULT_GRAPH)
                 .withShardNum(1)
                 .withBackend(IViewDesc.BackendType.Memory)
                 .build()
 
-            PGraphWindow<String, Double, Integer> graph =
-                ctx.buildWindowStreamGraph(vertexSource, edgeSource, graphViewDesc)
+            val graph = ctx.buildWindowStreamGraph(vertexSource, edgeSource, graphViewDesc)
 
             graph.compute(new PRAlgorithm(10, 0.85d))
                 .compute(1)
@@ -115,18 +110,18 @@ class PageRank {
 
         @Override
         void compute(String vertexId, Iterator<Double> messages) {
-            def vertex = context.vertex().get()
-            def outEdges = context.edges().outEdges
+            val vertex = context.vertex().get()
+            val outEdges = context.edges().outEdges
             if (context.iterationId == 1L) {
                 if (outEdges) {
                     context.sendMessageToNeighbors(vertex.value / outEdges.size() as double)
                 }
             } else {
-                double sum = messages.sum(0d) as double
+                double sum = messages.sum(0d)
                 double pr = sum * alpha + (1 - alpha)
                 context.setNewVertexValue(pr)
                 if (outEdges) {
-                    context.sendMessageToNeighbors(pr / outEdges.size() as double)
+                    context.sendMessageToNeighbors(pr / outEdges.size())
                 }
             }
         }

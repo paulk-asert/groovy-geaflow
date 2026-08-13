@@ -17,6 +17,12 @@ completing in ~5s.
 same job written in different Groovy styles, to explore which ones survive
 kryo serialization across GeaFlow's RPC boundary (see findings below).
 
+`PageRank.groovy` is written in idiomatic dynamic Groovy; `SubmitVariants.groovy`
+is deliberately `@CompileStatic`, since the lambda and method-reference submission
+forms rely on static compilation to produce serializable indy lambdas. The
+variants only *delegate* to the job after deserialization, so the job class's own
+compilation mode doesn't affect the experiments.
+
 * GeaFlow 0.8.0-incubating (Maven Central, `org.apache.geaflow`)
 * Groovy 6.0.0-beta-2, Gradle toolchain JDK 17
 
