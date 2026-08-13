@@ -4,6 +4,10 @@ plugins {
 
 repositories {
     mavenCentral()
+    maven {
+        // staging repo for Groovy 6.0.0-beta-2; can be removed once the release is on Maven Central
+        url = 'https://repository.apache.org/content/repositories/orgapachegroovy-1116'
+    }
 }
 
 java {
@@ -14,7 +18,7 @@ java {
 
 ext {
     geaflowVersion = '0.8.0-incubating'
-    groovyVersion = '5.0.8'
+    groovyVersion = '6.0.0-beta-2'
 }
 
 // override with e.g. -PlocalGroovyJar=$HOME/Developer/groovy-6.0.0-beta-2/lib/groovy-6.0.0-beta-2.jar

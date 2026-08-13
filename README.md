@@ -18,7 +18,7 @@ same job written in different Groovy styles, to explore which ones survive
 kryo serialization across GeaFlow's RPC boundary (see findings below).
 
 * GeaFlow 0.8.0-incubating (Maven Central, `org.apache.geaflow`)
-* Groovy 5.0.8, Gradle toolchain JDK 17
+* Groovy 6.0.0-beta-2, Gradle toolchain JDK 17
 
 ## Findings so far
 
@@ -35,31 +35,31 @@ kryo serialization across GeaFlow's RPC boundary (see findings below).
    Tested with `SubmitVariants.groovy` (`gradle runVariant -Pvariant=...`),
    all under `@CompileStatic`, submitting the same job as a `PipelineTask`:
 
-   | Form | Runtime class | Result |
+   | Form | Runtime class | Result (Groovy 6.0.0-beta-2) |
    |---|---|---|
    | class implementing `PipelineTask` | normal class | works |
    | native lambda `(ctx) -> runJob(ctx)` | indy lambda (serializable) | **works** |
-   | method ref `SubmitVariants::runJob` | indy lambda (non-serializable) | fails at kryo write: `Could not serialize lambda` |
+   | method ref `SubmitVariants::runJob` | indy lambda (serializable) | **works** (Groovy 6+ only, see below) |
    | closure `{ ctx -> runJob(ctx) }` (implicit SAM) | `jdk.proxy` | fails at kryo read: `InstantiationError: InvocationHandler` |
    | closure `as PipelineTask` | `jdk.proxy` | fails at kryo read (same) |
 
    So the Groovy sweet spot is: hoist the body into a (static) method and wrap it
-   in a **native lambda expression** — GeaFlow registers kryo's `ClosureSerializer`,
-   which round-trips serializable indy lambdas via `SerializedLambda`.
-   Lambda captures must themselves be serializable; a no-capture static context is safest.
+   in a **native lambda expression** or **method reference** — GeaFlow registers
+   kryo's `ClosureSerializer`, which round-trips serializable indy lambdas via
+   `SerializedLambda`. Lambda captures must themselves be serializable;
+   a no-capture static context is safest.
 
    Two upstream-worthy observations from this:
-   * **Groovy bug — fixed in 6.0.0-beta-2**: with static compilation, a *method
-     reference* assigned to a `Serializable` functional interface is not compiled
-     as a serializable lambda (plain `ObjectOutputStream` throws
-     `NotSerializableException: Non-serializable lambda`), while the equivalent
-     *lambda expression* is. Java makes both serializable. Affects Groovy 4.0.32,
-     5.0.6/5.0.8, and 6.0.0-alpha-1 (`repro/SerCheck.groovy`, no GeaFlow needed).
-     Fixed by GROOVY-11993 "Support serializable method reference" (#2514,
-     Daniel Sun, May 2026): verified with `~/Developer/groovy-6.0.0-beta-2` —
-     standalone round-trip (serialize + deserialize + invoke) passes, and the
-     `methodref` variant now succeeds end-to-end through GeaFlow's kryo/RPC path
-     (`gradle runVariant -Pvariant=methodref -PlocalGroovyJar=.../groovy-6.0.0-beta-2.jar`).
+   * **Method references need Groovy 6.** In Groovy 4.x/5.x (and 6.0.0-alpha-1),
+     with static compilation, a *method reference* assigned to a `Serializable`
+     functional interface is not compiled as a serializable lambda (plain
+     `ObjectOutputStream` throws `NotSerializableException: Non-serializable
+     lambda`), while the equivalent *lambda expression* is. Java makes both
+     serializable (`repro/SerCheck.groovy`, no GeaFlow needed). Fixed by
+     [GROOVY-11993](https://issues.apache.org/jira/browse/GROOVY-11993)
+     "Support serializable method reference" from 6.0.0-beta-2: the standalone
+     round-trip (serialize + deserialize + invoke) passes, and the `methodref`
+     variant succeeds end-to-end through GeaFlow's kryo/RPC path.
      Groovy 5.x still affected — possible backport candidate.
    * **GEP-27 flags don't change the picture** (tested on beta-2 with
      `-Pgep27` → `-Dgroovy.target.closure.pack=true -Dgroovy.target.lambda.hoist=true`
